@@ -8,11 +8,12 @@
 #include <QFileSystemWatcher>
 #include <QUrl>
 #include <QDir>
-#include <QEventLoop>
+#include <QThread>
 #include <QDirIterator>
 #include <QDesktopServices>
 #include <iostream>
 #include <libs/json.hpp>
+#include <filecontroller.h>
 
 enum resultCode {
     OK = 0,
@@ -32,10 +33,13 @@ class FileManager : public QObject
 private:
     nlohmann::json database;
     QString database_path;
+    QString copyFolderPath;
     QFileSystemWatcher watcherDirectory;
     QFileSystemWatcher watcherFile;
 
     void addPathToWatcher();
+
+    void addThread(const QStringList& files, operationTypes type);
 
 public:
     FileManager();
@@ -56,10 +60,16 @@ public:
     resultCode checkFiles(int pos_dir);
 
     resultCode addPath(const QString& path, const QString& pattern = "all");
+    resultCode addFiles(const QString& dir_name, const QStringList& files);
+    resultCode addFiles(int dir_pos, const QStringList& files);
+    resultCode addFile(const QString& dir_name, const QString& file_path);
+    resultCode addFile(int dir_pos, const QString& file_path);
     resultCode deletePath(const QString& path);
     resultCode deletePath(int pos);
     resultCode deleteFileSafety(int pos_dir, int pos_file);
     resultCode deleteFileForever(int pos_dir, int pos_file);
+    resultCode deleteSomeFiles(const QString& dir_name, const QStringList& files);
+    resultCode deleteSomeFiles(int pos_dir, const QStringList& files);
     resultCode makeCommand(int argc, char *argv[]);
 
     QString getDirectory(int pos_dir);
@@ -67,9 +77,18 @@ public:
     QStringList getPaths();
     QStringList getFiles(const QString& dir);
     QStringList getFiles(int pos_dir);
+    QStringList getFilters(const QString& dir);
+    QStringList getFilters(int pos_dir);
+
+    resultCode setFiles(const QString& dir, const QStringList& files);
+    resultCode setFiles(int pos_dir, const QStringList& files);
+
+    QStringList parseFilters(const QString& filters);
 
     void printPaths();
     resultCode printFiles(const QString& dir);
+
+    void deleteSomeCopiedFiles(const QStringList& files);
 
 public slots:
     void ifDirectoryChanged(const QString& path);

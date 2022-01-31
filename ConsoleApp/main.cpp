@@ -1,6 +1,5 @@
 #include <QCoreApplication>
 #include <filemanager.h>
-#include <QFileInfo>
 
 int main(int argc, char *argv[])
 {
@@ -8,9 +7,9 @@ int main(int argc, char *argv[])
 
     setlocale(0, "");
 
-    FileManager manager;
+    FileManager manager = FileManager();
 
-    manager.addPath("D:\\", "Microsoft*.dll");
+    manager.addPath("D:/lib", "a*.txt");
 
     return a.exec();
 }

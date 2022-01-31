@@ -4,15 +4,14 @@
 
 FileManager::FileManager()
 {
-#ifdef QT_DEBUG
     database_path = "../database.json";
-#else
-    database_path = "../../database.json";
-#endif
+    copyFolderPath = "../CopiedFiles";
     openDB();
 
     if (isDBOpen())
     {
+        checkDirectories();
+
         addPathToWatcher();
 
         QObject::connect(&watcherDirectory, &QFileSystemWatcher::directoryChanged, \
@@ -26,8 +25,6 @@ FileManager::FileManager()
         {
             this->ifFileChanged(path);
         });
-
-        checkDirectories();
     }
 }
 
@@ -131,16 +128,12 @@ resultCode FileManager::checkPath(const QString &directory)
 {
     if (isExists(directory))
     {
-        if (isDir(directory))
+        QFileInfo p(directory);
+        if (!isEmployed(p.absoluteFilePath()))
         {
-            QFileInfo p(directory);
-            if (!isEmployed(p.absoluteFilePath()))
-            {
-                return resultCode::OK;
-            }
-            return resultCode::employedPath;
+            return resultCode::OK;
         }
-        return resultCode::notFolder;
+        return resultCode::employedPath;
     }
     return resultCode::errorPath;
 }
@@ -217,7 +210,7 @@ resultCode FileManager::checkFiles(const QString &dir)
 
 resultCode FileManager::checkFiles(int pos_dir)
 {
-    if (pos_dir < static_cast<int>(database["paths"].size()) || pos_dir > 0)
+    if (pos_dir < static_cast<int>(database["paths"].size()) || pos_dir >= 0)
     {
 
         QList<int> positions;
@@ -247,12 +240,12 @@ resultCode FileManager::addPath(const QString &path, const QString& pattern)
 {
     resultCode code = checkPath(path);
 
+    if (isFile(path))
+        return resultCode::notFolder;
+
     if (code == resultCode::OK)
     {
-        QStringList filters = {};
-
-        if (pattern != "all" && pattern != "")
-            filters = pattern.split("|");
+        QStringList filters = parseFilters(pattern);
 
         QFileInfo p(path);
         QDir dir(p.absoluteFilePath());
@@ -265,9 +258,14 @@ resultCode FileManager::addPath(const QString &path, const QString& pattern)
 
         QDirIterator it(p.absoluteFilePath(), filters, QDir::Files);
 
+        watcherDirectory.addPath(p.absoluteFilePath());
+
         while (it.hasNext())
         {
-            j["files"].push_back(it.next().toStdString());
+            QString path = it.next();
+
+            watcherFile.addPath(path);
+            j["files"].push_back(path.toStdString());
         }
 
         database["paths"].push_back(j);
@@ -278,9 +276,117 @@ resultCode FileManager::addPath(const QString &path, const QString& pattern)
     return code;
 }
 
+resultCode FileManager::addFiles(const QString &dir_name, const QStringList &files)
+{
+    resultCode code = checkPath(dir_name);
+
+    if (code == resultCode::employedPath)
+    {
+        for (qsizetype i = 0; i < files.size(); i++)
+        {
+            code = checkPath(files[i]);
+            if (code != resultCode::OK)
+            {
+                return code;
+            }
+        }
+
+        int dir_pos = findDirectory(dir_name);
+
+        for (qsizetype i = 0; i < files.size(); i++)
+        {
+            database["paths"][dir_pos]["files"].push_back(files[i].toStdString());
+        }
+
+        saveDB();
+
+        return resultCode::OK;
+    }
+
+    if (code == resultCode::OK)
+        return resultCode::incorrectPath;
+    return code;
+}
+
+resultCode FileManager::addFiles(int dir_pos, const QStringList &files)
+{
+    if (dir_pos <= static_cast<int>(database["paths"].size()) || dir_pos >= 0)
+    {
+        resultCode code;
+        for (qsizetype i = 0; i < files.size(); i++)
+        {
+            code = checkPath(files[i]);
+            if (code != resultCode::OK)
+                return code;
+            if (isDir(files[i]))
+                return resultCode::notFile;
+        }
+
+        for (qsizetype i = 0; i < files.size(); i++)
+        {
+            database["paths"][dir_pos]["files"].push_back(files[i].toStdString());
+        }
+
+        saveDB();
+
+        return resultCode::OK;
+    }
+    return resultCode::incorrectPathId;
+}
+
+resultCode FileManager::addFile(const QString &dir_name, const QString &file_path)
+{
+    resultCode code = checkPath(dir_name);
+
+    if (isFile(dir_name))
+        return resultCode::notFolder;
+
+    if (code == resultCode::employedPath)
+    {
+        code = checkPath(file_path);
+
+        if (code != resultCode::OK)
+            return code;
+
+        int dir_pos = findDirectory(dir_name);
+
+        database["paths"][dir_pos]["files"].push_back(dir_name.toStdString());
+
+        saveDB();
+
+        return resultCode::OK;
+    }
+
+    if (code == resultCode::OK)
+        return resultCode::incorrectPath;
+    return code;
+}
+
+resultCode FileManager::addFile(int dir_pos, const QString &file_path)
+{
+
+    if (dir_pos <= static_cast<int>(database["paths"].size()) || dir_pos >= 0)
+    {
+        resultCode code;
+        code = checkPath(file_path);
+        if (code != resultCode::OK)
+            return code;
+
+        database["paths"][dir_pos]["files"].push_back(file_path.toStdString());
+
+        saveDB();
+
+        return resultCode::OK;
+    }
+    return resultCode::incorrectPathId;
+}
+
 resultCode FileManager::deletePath(const QString &path)
 {
     resultCode code = checkPath(path);
+
+    if (isFile(path))
+        return resultCode::notFolder;
 
     if (code == resultCode::employedPath)
     {
@@ -289,6 +395,8 @@ resultCode FileManager::deletePath(const QString &path)
         if (pos != -1)
         {
             database["paths"].erase(pos);
+
+            saveDB();
 
             return resultCode::OK;
         }
@@ -303,9 +411,11 @@ resultCode FileManager::deletePath(const QString &path)
 
 resultCode FileManager::deletePath(int pos)
 {
-    if (pos < static_cast<int>(database["paths"].size()) || pos > 0)
+    if (pos < static_cast<int>(database["paths"].size()) || pos >= 0)
     {
         database["paths"].erase(pos);
+
+        saveDB();
 
         return resultCode::OK;
     }
@@ -314,7 +424,7 @@ resultCode FileManager::deletePath(int pos)
 
 resultCode FileManager::deleteFileSafety(int pos_dir, int pos_file)
 {
-    if (pos_dir < static_cast<int>(database["paths"].size()) || pos_dir > 0)
+    if (pos_dir < static_cast<int>(database["paths"].size()) || pos_dir >= 0)
     {
         auto files = getFiles(pos_dir);
         if (pos_file < files.size() || pos_file > 0)
@@ -330,7 +440,7 @@ resultCode FileManager::deleteFileSafety(int pos_dir, int pos_file)
 
 resultCode FileManager::deleteFileForever(int pos_dir, int pos_file)
 {
-    if (pos_dir < static_cast<int>(database["paths"].size()) || pos_dir > 0)
+    if (pos_dir < static_cast<int>(database["paths"].size()) || pos_dir >= 0)
     {
         auto files = getFiles(pos_dir);
         if (pos_file < files.size() || pos_file > 0)
@@ -339,6 +449,74 @@ resultCode FileManager::deleteFileForever(int pos_dir, int pos_file)
 
             return resultCode::OK;
         }
+    }
+    return resultCode::incorrectPathId;
+}
+
+resultCode FileManager::deleteSomeFiles(const QString &dir_name, const QStringList &files)
+{
+
+    resultCode code = checkPath(dir_name);
+
+    if (isFile(dir_name))
+        return resultCode::notFolder;
+
+    if (code == resultCode::employedPath)
+    {
+        int pos = findDirectory(dir_name);
+
+        if (pos != -1)
+        {
+            QList<int> positions;
+
+            for (qsizetype i = 0; i < static_cast<qsizetype>(database["paths"][pos]["files"].size()); i++)
+            {
+                if (files.contains(QString::fromStdString(database["paths"][pos]["files"][i].get<std::string>())))
+                {
+                    positions.push_back(i);
+                }
+            }
+
+            for (int i = positions.size() - 1; i > -1; i--)
+            {
+                database["paths"][pos]["files"].erase(positions[i]);
+            }
+
+            saveDB();
+
+            return resultCode::OK;
+        }
+
+        return resultCode::incorrectPath;
+    }
+
+    if (code == resultCode::OK)
+        return resultCode::incorrectPath;
+    return code;
+}
+
+resultCode FileManager::deleteSomeFiles(int pos_dir, const QStringList &files)
+{
+    if (pos_dir < static_cast<int>(database["paths"].size()) || pos_dir >= 0)
+    {
+        QList<int> positions;
+
+        for (qsizetype i = 0; i < static_cast<qsizetype>(database["paths"][pos_dir]["files"].size()); i++)
+        {
+            if (files.contains(QString::fromStdString(database["paths"][pos_dir]["files"][i].get<std::string>())))
+            {
+                positions.push_back(i);
+            }
+        }
+
+        for (int i = positions.size() - 1; i > -1; i--)
+        {
+            database["paths"][pos_dir]["files"].erase(positions[i]);
+        }
+
+        saveDB();
+
+        return resultCode::OK;
     }
     return resultCode::incorrectPathId;
 }
@@ -377,7 +555,7 @@ resultCode FileManager::makeCommand(int argc, char **argv)
 
 QString FileManager::getDirectory(int pos_dir)
 {
-    if (pos_dir <= static_cast<int>(database["paths"].size()) || pos_dir > 0)
+    if (pos_dir <= static_cast<int>(database["paths"].size()) || pos_dir >= 0)
     {
         return QString::fromStdString(database["paths"][pos_dir].get<std::string>());
     }
@@ -386,7 +564,7 @@ QString FileManager::getDirectory(int pos_dir)
 
 QString FileManager::getFile(int pos_dir, int pos_file)
 {
-    if (pos_dir < static_cast<int>(database["paths"].size()) || pos_dir > 0)
+    if (pos_dir < static_cast<int>(database["paths"].size()) || pos_dir >= 0)
     {
         auto files = getFiles(pos_dir);
         if (pos_file < files.size() || pos_file > 0)
@@ -414,7 +592,7 @@ QStringList FileManager::getFiles(const QString &dir)
     resultCode code = checkPath(dir);
     QStringList files;
 
-    if (code == resultCode::employedPath)
+    if (code == resultCode::employedPath && isDir(dir))
     {
         int pos = findDirectory(dir);
         for (size_t i = 0; i < database["paths"][pos]["files"].size(); i++)
@@ -428,11 +606,88 @@ QStringList FileManager::getFiles(const QString &dir)
 QStringList FileManager::getFiles(int pos_dir)
 {
     QStringList files;
-    if (pos_dir <= static_cast<int>(database["paths"].size()) || pos_dir > 0)
+    if (pos_dir <= static_cast<int>(database["paths"].size()) || pos_dir >= 0)
     {
         return getFiles(QString::fromStdString(database["paths"][pos_dir]["dir"].get<std::string>()));
     }
     return files;
+}
+
+QStringList FileManager::getFilters(const QString &dir)
+{
+    resultCode code = checkPath(dir);
+    QStringList filters;
+
+    if (code == resultCode::employedPath && isDir(dir))
+    {
+        int pos = findDirectory(dir);
+        filters = parseFilters(QString::fromStdString(database["paths"][pos]["pattern"].get<std::string>()));
+    }
+
+    return filters;
+}
+
+QStringList FileManager::getFilters(int pos_dir)
+{
+    QStringList files;
+    if (pos_dir <= static_cast<int>(database["paths"].size()) || pos_dir >= 0)
+    {
+        return parseFilters(QString::fromStdString(database["paths"][pos_dir]["pattern"].get<std::string>()));
+    }
+    return files;
+}
+
+resultCode FileManager::setFiles(const QString &dir, const QStringList &files)
+{
+    resultCode code = checkPath(dir);
+
+    if (isFile(dir))
+        return resultCode::notFolder;
+
+    if (code == resultCode::employedPath)
+    {
+        int pos = findDirectory(dir);
+
+        database["paths"][pos]["files"] = "[]"_json;
+        for (auto name : files)
+        {
+            database["paths"][pos]["files"].push_back(name.toStdString());
+        }
+
+        return resultCode::OK;
+    }
+
+    if (code == resultCode::OK)
+        return resultCode::incorrectPath;
+    return code;
+}
+
+resultCode FileManager::setFiles(int pos_dir, const QStringList &files)
+{
+    if (pos_dir <= static_cast<int>(database["paths"].size()) || pos_dir >= 0)
+    {
+        database["paths"][pos_dir]["files"] = "[]"_json;
+        for (auto name : files)
+        {
+            database["paths"][pos_dir]["files"].push_back(name.toStdString());
+        }
+
+        return resultCode::OK;
+    }
+    return resultCode::incorrectPathId;
+}
+
+QStringList FileManager::parseFilters(const QString &filters)
+{
+
+    QStringList _filters = {};
+
+    if (filters != "all" && filters != "")
+    {
+        _filters = filters.split("|");
+    }
+
+    return _filters;
 }
 
 void FileManager::printPaths()
@@ -447,6 +702,10 @@ void FileManager::printPaths()
 resultCode FileManager::printFiles(const QString& dir)
 {
     resultCode code = checkPath(dir);
+
+    if (isFile(dir))
+        return resultCode::notFolder;
+
     if (code == resultCode::employedPath)
     {
         QStringList directoryFiles = getFiles(dir);
@@ -461,17 +720,64 @@ resultCode FileManager::printFiles(const QString& dir)
     return code;
 }
 
+void FileManager::deleteSomeCopiedFiles(const QStringList &files)
+{
+    QStringList files_to_delete;
+    QDir copy_dir(copyFolderPath);
+    QFileInfo file;
+
+    for (qsizetype i = 0; i  < files.size(); i++)
+    {
+        file.setFile(files[i]);
+        files_to_delete.push_back(copy_dir.filePath(file.fileName()));
+    }
+
+    addThread(files_to_delete, operationTypes::operation_delete);
+}
+
+//slots:
+
 void FileManager::ifDirectoryChanged(const QString& path)
 {
-    std::cout << qPrintable(path) << std::endl;
+    QStringList files = getFiles(path);
+    QStringList filesToCopy = {};
+    QStringList filters = getFilters(path);
+    QStringList filesToDelete = {};
 
+    QDirIterator it(path, filters, QDir::Files);
+
+    while (it.hasNext())
+    {
+       QString file_path = it.next();
+
+       if (!files.contains(file_path))
+       {
+           files.push_back(file_path);
+           filesToCopy.push_back(file_path);
+       }
+    }
+
+    for (qsizetype i = 0; i < files.size(); i++)
+    {
+        if (!isExists(files[i]))
+            filesToDelete.push_back(files[i]);
+    }
+
+    if (filesToCopy.size() != 0)
+    {
+        addThread(filesToCopy, operationTypes::operation_copy);
+        addFiles(path, filesToCopy);
+    }
+    if (filesToDelete.size() != 0)
+    {
+        deleteSomeFiles(path, filesToDelete);
+        deleteSomeCopiedFiles(filesToDelete);
+    }
 }
 
 void FileManager::ifFileChanged(const QString& path)
 {
-    std::cout << qPrintable(path) << std::endl;
-
-    //QDesktopServices::openUrl(QUrl(path));
+    QDesktopServices::openUrl(QUrl(path));
 }
 
 //Private Methods:
@@ -487,4 +793,21 @@ void FileManager::addPathToWatcher()
             watcherFile.addPath(QString::fromStdString(database["paths"][i]["files"][j].get<std::string>()));
         }
     }
+}
+
+void FileManager::addThread(const QStringList& files, operationTypes type)
+{
+    FileController *controller = new FileController(copyFolderPath, type);
+    QThread* thread = new QThread;
+    controller->addFiles(files);
+    controller->moveToThread(thread);
+
+    connect(thread, SIGNAL(started()), controller, SLOT(process()));
+    connect(controller, SIGNAL(finished()), thread, SLOT(quit()));
+    connect(controller, SIGNAL(finished()), controller, SLOT(deleteLater()));
+    connect(thread, SIGNAL(finished()), thread, SLOT(deleteLater()));
+
+    thread->start();
+
+    return;
 }
