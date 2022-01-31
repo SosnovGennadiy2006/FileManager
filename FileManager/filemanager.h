@@ -72,6 +72,7 @@ public:
     resultCode deleteSomeFiles(const QString& dir_name, const QStringList& files);
     resultCode deleteSomeFiles(int pos_dir, const QStringList& files);
     resultCode makeCommand(int argc, char *argv[]);
+    resultCode makeCommand(int argc, const QStringList& argv);
 
     QString getDirectory(int pos_dir);
     QString getFile(int pos_dir, int pos_file);

@@ -525,7 +525,14 @@ resultCode FileManager::makeCommand(int argc, char **argv)
 {
     if (isDBOpen())
     {
-        if (argc == 3)
+        if (argc == 4)
+        {
+            if (QString::compare(argv[1], "add") == 0)
+            {
+                resultCode code = addPath(argv[2], argv[3]);
+                return code;
+            }
+        }else if (argc == 3)
         {
             if (QString::compare(argv[1], "add") == 0)
             {
@@ -534,6 +541,45 @@ resultCode FileManager::makeCommand(int argc, char **argv)
             } else if (QString::compare(argv[1], "delete") == 0)
             {
                 resultCode code = deletePath(argv[2] - 1);
+                return code;
+            }
+        } else if (argc == 2)
+        {
+            if (QString::compare(argv[1], "printPaths") == 0)
+            {
+                std::cout << "There are " << database["paths"].size() \
+                          << " paths:" << std::endl;
+                printPaths();
+                return resultCode::OK;
+            }
+        }
+        return resultCode::OK;
+    }else
+    {
+        return resultCode::connectionError;
+    }
+}
+
+resultCode FileManager::makeCommand(int argc, const QStringList& argv)
+{
+    if (isDBOpen())
+    {
+        if (argc == 4)
+        {
+            if (QString::compare(argv[1], "add") == 0)
+            {
+                resultCode code = addPath(argv[2], argv[3]);
+                return code;
+            }
+        }else if (argc == 3)
+        {
+            if (QString::compare(argv[1], "add") == 0)
+            {
+                resultCode code = addPath(argv[2]);
+                return code;
+            } else if (QString::compare(argv[1], "delete") == 0)
+            {
+                resultCode code = deletePath(argv[2].toInt() - 1);
                 return code;
             }
         } else if (argc == 2)
