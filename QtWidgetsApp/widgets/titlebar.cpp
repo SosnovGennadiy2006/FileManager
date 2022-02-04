@@ -1,7 +1,7 @@
 #include "titlebar.h"
 
 QCustomTitleBar::QCustomTitleBar(QWidget *parent) :
-    QWidget(parent), FRAME_BUTTON_SIZE(24, 24)
+    QWidget(parent), FRAME_BUTTON_SIZE(30, 30)
 {
     this->mFrameButtons = QCustomAttrs::Close | QCustomAttrs::Maximize | QCustomAttrs::Minimize;
 
@@ -29,9 +29,15 @@ QCustomTitleBar::QCustomTitleBar(QWidget *parent) :
     this->lblWindowTitle.setText("QCustomWindow");
     this->lblWindowTitle.setAlignment(Qt::AlignCenter);
 
-    this->btnClose.setText("X");
-    this->btnMaximize.setText("+");
-    this->btnMinimize.setText("-");
+    QFont font(QString::fromUtf8("Marlett"));
+
+    this->btnClose.setFont(font);
+    this->btnMaximize.setFont(font);
+    this->btnMinimize.setFont(font);
+
+    this->btnClose.setText("r");
+    this->btnMaximize.setText("1");
+    this->btnMinimize.setText("0");
     this->btnClose.setStyleSheet(QStringLiteral(
         "QPushButton::hover {\n"
         "   background: #DF1A2E;\n"
@@ -41,9 +47,9 @@ QCustomTitleBar::QCustomTitleBar(QWidget *parent) :
         "}\n"
     ));
 
-    this->lblWindowIcon.setMaximumSize(FRAME_BUTTON_SIZE);
-    this->lblWindowIcon.setMinimumSize(FRAME_BUTTON_SIZE);
-    this->lblWindowIcon.setPixmap(QPixmap("../Images/icon.ico"));
+    this->lblWindowIcon.setMaximumSize(QSize(FRAME_BUTTON_SIZE.width() - 8, FRAME_BUTTON_SIZE.height() - 8));
+    this->lblWindowIcon.setMinimumSize(QSize(FRAME_BUTTON_SIZE.width() - 8, FRAME_BUTTON_SIZE.height() - 8));
+    this->lblWindowIcon.setPixmap(QPixmap("../QtWidgetsApp/Images/icon.png"));
 
     this->btnClose.setObjectName("btnClose");
     this->btnMaximize.setObjectName("btnMaximize");
@@ -63,14 +69,20 @@ QCustomTitleBar::QCustomTitleBar(QWidget *parent) :
     this->mLayout.addWidget(&this->btnMinimize);
     this->mLayout.addWidget(&this->btnMaximize);
     this->mLayout.addWidget(&this->btnClose);
-    this->mLayout.setContentsMargins(0, 0, 0, 0);
+    this->mLayout.setContentsMargins(4, 0, 0, 0);
     this->mLayout.setSpacing(0);
 
     this->setLayout(&this->mLayout);
 
     connect(&this->btnClose, &QPushButton::clicked, this, [this]{ emit this->closeRequest(); });
     connect(&this->btnMinimize, &QPushButton::clicked, this, [this]{ emit this->minimizeRequest(); });
-    connect(&this->btnMaximize, &QPushButton::clicked, this, [this]{ emit this->maximizeRequest(); });
+    connect(&this->btnMaximize, &QPushButton::clicked, this, [this]{
+        if (this->btnMaximize.text() == "1")
+            this->btnMaximize.setText("2");
+        else
+            this->btnMaximize.setText("1");
+        emit this->maximizeRequest();
+    });
 
     connect(this, &QWidget::windowTitleChanged, &this->lblWindowTitle, &QLabel::setText);
     connect(this, &QWidget::windowIconChanged, this, [this](const QIcon &icon){

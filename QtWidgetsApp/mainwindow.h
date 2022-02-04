@@ -26,6 +26,7 @@
 #include <QVBoxLayout>
 #include <QPaintEvent>
 #include <QStyleOption>
+#include <QDir>
 #include <QGraphicsDropShadowEffect>
 
 #include "widgets/titlebar.h"

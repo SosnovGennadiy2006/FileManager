@@ -58,8 +58,7 @@ MainWindow::~MainWindow()
 
 void MainWindow::setTitleBar(QCustomTitleBar *tb){
     tb->setParent(this);
-    tb->setWindowIcon(QIcon("Images/icon.ico"));
-    tb->setWindowTitle(this->windowTitle());
+    tb->setWindowTitle("FileManager");
 
     connect(tb, &QCustomTitleBar::closeRequest, this, &MainWindow::close);
     connect(tb, &QCustomTitleBar::maximizeRequest, this, [this]{

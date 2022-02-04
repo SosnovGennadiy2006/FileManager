@@ -3,6 +3,7 @@
 
 #include <QIcon>
 #include <QSize>
+#include <QFont>
 #include <QEvent>
 #include <QLabel>
 #include <QPoint>
